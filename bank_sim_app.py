@@ -71,8 +71,8 @@ st.title("🏦 Bank Queue Simulation")
 
 st.sidebar.header("Simulation Parameters")
 sim_time = st.sidebar.slider("Simulation Time (minutes)", 100,1000000, 50000)
-arrival_rate = st.sidebar.slider("Customer Arrival Rate (per min)", 1, 50, 5)
-num_cashiers = st.sidebar.slider("Number of Cashiers", 1, 50, 5)
+arrival_rate = st.sidebar.slider("Customer Arrival Rate (per min)", 0.10, 5, 0.75)
+num_cashiers = st.sidebar.slider("Number of Cashiers", 1, 25, 5)
 atm_prob = st.sidebar.slider("Probability Customer Goes to ATM First", 0.0, 1.0, 0.5)
 
 st.sidebar.markdown("### ATM Service Time (Triangular)")
