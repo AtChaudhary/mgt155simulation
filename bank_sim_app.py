@@ -1,121 +1,102 @@
 import streamlit as st
-import simpy
 import numpy as np
+import simpy
 import matplotlib.pyplot as plt
-import pandas as pd
-import time
 
-# Simulation class
-class BankSystem:
-    def __init__(self, env, sim_time, num_cashiers, arrival_rate,
-                 atm_service_time, cashier_service_time, atm_prob):
-        self.env = env
+class ServerSystem:
+    def __init__(self, sim_time, num_cashiers, arrival_rate, max_service_time):
         self.sim_time = sim_time
-        self.cashiers = simpy.Resource(env, capacity=num_cashiers)
-        self.atm = simpy.Resource(env, capacity=1)
-
+        self.num_cashiers = num_cashiers
         self.arrival_rate = arrival_rate
-        self.atm_service_time = atm_service_time
-        self.cashier_service_time = cashier_service_time
-        self.atm_prob = atm_prob
+        self.max_service_time = max_service_time
+
+        self.env = simpy.Environment()
+        self.atm = simpy.Resource(self.env, capacity=1)
+        self.cashiers = simpy.Resource(self.env, capacity=self.num_cashiers)
 
         self.flow_time = []
+        self.wait_time = []
+        self.finished_customers = 0
         self.inv_time = []
         self.inv_queue = []
+        self.inv_service = []
+        self.inv_system = []
 
-        self.atm_busy_time = 0.0
-        self.cashier_busy_time = 0.0
-        self.last_recorded_time = 0.0
-
-        env.process(self.generate_customers())
-
-    def generate_customers(self):
+    def monitor(self):
         while True:
-            yield self.env.timeout(np.random.exponential(1.0 / self.arrival_rate))
-            self.env.process(self.customer_process())
+            current_time = self.env.now
+            atm_queue_len = len(self.atm.queue)
+            cashier_queue_len = len(self.cashiers.queue)
+            self.inv_time.append(current_time)
+            self.inv_queue.append((atm_queue_len, cashier_queue_len))
+            self.inv_service.append((len(self.atm.users), len(self.cashiers.users)))
+            self.inv_system.append(atm_queue_len + cashier_queue_len + len(self.atm.users) + len(self.cashiers.users))
+            yield self.env.timeout(1)
 
-    def customer_process(self):
-        arrival = self.env.now
+    def use_cashier(self, arrival_time):
+        with self.cashiers.request() as request:
+            yield request
+            self.wait_time.append(self.env.now - arrival_time)
+            yield self.env.timeout(np.random.triangular(3, 5, self.max_service_time))
+            self.finished_customers += 1
+            self.flow_time.append(self.env.now - arrival_time)
 
-        if np.random.uniform() < self.atm_prob:
-            with self.atm.request() as req:
-                yield req
-                start = self.env.now
-                duration = self.sample_triangular(*self.atm_service_time)
-                yield self.env.timeout(duration)
-                self.atm_busy_time += duration
-        with self.cashiers.request() as req:
-            yield req
-            start = self.env.now
-            duration = self.sample_triangular(*self.cashier_service_time)
-            yield self.env.timeout(duration)
-            self.cashier_busy_time += duration
+    def customer(self, arrival_time):
+        if np.random.uniform() < 0.5:
+            with self.atm.request() as request:
+                yield request
+                self.wait_time.append(self.env.now - arrival_time)
+                yield self.env.timeout(np.random.triangular(1, 2, 4))
+            if np.random.uniform() < 0.3:
+                yield self.env.process(self.use_cashier(arrival_time))
+            else:
+                self.finished_customers += 1
+                self.flow_time.append(self.env.now - arrival_time)
+        else:
+            yield self.env.process(self.use_cashier(arrival_time))
 
-        self.flow_time.append(self.env.now - arrival)
+    def gen_arrivals(self):
+        while True:
+            yield self.env.timeout(np.random.exponential(1 / self.arrival_rate))
+            self.env.process(self.customer(self.env.now))
 
-        # Record queue length over time (sample every 1 minute)
-        if self.env.now - self.last_recorded_time >= 1:
-            self.inv_time.append(self.env.now)
-            self.inv_queue.append([
-                len(self.atm.queue),
-                len(self.cashiers.queue)
-            ])
-            self.last_recorded_time = self.env.now
+    def simulate(self):
+        self.env.process(self.monitor())
+        self.env.process(self.gen_arrivals())
+        self.env.run(until=self.sim_time)
 
-    def sample_triangular(self, low, mode, high):
-        return np.random.triangular(low, mode, high)
+# Streamlit interface
+st.title("🏦 Bank Process Flow Simulation")
+st.write("Adjust the parameters and rerun the simulation.")
 
-# --- Streamlit UI ---
-
-st.title("🏦 Bank Queue Simulation")
-
-st.sidebar.header("Simulation Parameters")
-sim_time = st.sidebar.slider("Simulation Time (minutes)", 100, 1000000, 50000)
-arrival_rate = st.sidebar.slider("Customer Arrival Rate (per min)", 0.10, 5.0, 0.75, step=0.01)
-num_cashiers = st.sidebar.slider("Number of Cashiers", 1, 25, 5)
-atm_prob = st.sidebar.slider("Probability Customer Goes to ATM First", 0.0, 1.0, 0.5)
-
-st.sidebar.markdown("### ATM Service Time (Triangular)")
-atm_low = st.sidebar.number_input("ATM Min Time", 0.5, 10.0, 1.0)
-atm_mode = st.sidebar.number_input("ATM Mode Time", 0.5, 10.0, 2.0)
-atm_high = st.sidebar.number_input("ATM Max Time", 0.5, 10.0, 3.0)
-
-st.sidebar.markdown("### Cashier Service Time (Triangular)")
-cashier_low = st.sidebar.number_input("Cashier Min Time", 1.0, 20.0, 2.0)
-cashier_mode = st.sidebar.number_input("Cashier Mode Time", 1.0, 20.0, 4.0)
-# Replace max time input with a slider to allow reducing max time (simulate training)
-cashier_high = st.sidebar.slider("Cashier Max Time (simulate training)", 6.0, 20.0, 10.0)
+sim_time = st.slider("Simulation Time (minutes)", 1000, 100000, 5000, step=1000)
+arrival_rate = st.slider("Arrival Rate (customers/min)", 0.1, 2.0, 0.75, step=0.05)
+num_cashiers = st.slider("Number of Cashiers", 1, 10, 5)
+max_service_time = st.slider("Cashier Max Service Time (minutes)", 10, 30, 20)
 
 if st.button("Run Simulation"):
-    # Run simulation
-    env = simpy.Environment()
-    system = BankSystem(
-        env, sim_time, num_cashiers, arrival_rate,
-        (atm_low, atm_mode, atm_high),
-        (cashier_low, cashier_mode, cashier_high),
-        atm_prob
-    )
-    env.run(until=sim_time)
+    system = ServerSystem(sim_time, num_cashiers, arrival_rate, max_service_time)
+    system.simulate()
 
-    # KPIs and visualization
-    st.header("📊 Simulation Results")
-    total_customers = len(system.flow_time)
-    avg_time = np.mean(system.flow_time)
-    st.metric("Total Customers Served", total_customers)
-    st.metric("Average Time in Bank", f"{avg_time:.2f} minutes")
-    st.metric("ATM Utilization", f"{system.atm_busy_time / sim_time:.2%}")
-    st.metric("Cashier Utilization", f"{system.cashier_busy_time / (sim_time * num_cashiers):.2%}")
+    # Metrics
+    mean_flow_time = np.mean(system.flow_time)
+    mean_wait_time = np.mean(system.wait_time)
+    mean_atm_q = np.mean([q[0] for q in system.inv_queue])
+    mean_cashier_q = np.mean([q[1] for q in system.inv_queue])
+    cashier_util = np.mean([s[1] for s in system.inv_service]) / num_cashiers
 
-    st.subheader("⏱ Distribution of Time in Bank")
+    st.subheader("📊 KPIs")
+    st.write(f"**Avg Time in Bank:** {mean_flow_time:.2f} mins")
+    st.write(f"**Avg Wait Time:** {mean_wait_time:.2f} mins")
+    st.write(f"**Cashier Utilization:** {cashier_util * 100:.2f}%")
+    st.write(f"**Mean Queue Length - ATM:** {mean_atm_q:.2f}")
+    st.write(f"**Mean Queue Length - Cashiers:** {mean_cashier_q:.2f}")
+    st.write(f"**Total Customers Served:** {system.finished_customers}")
+
+    st.subheader("⏱ Distribution of Time in System")
     fig, ax = plt.subplots()
-    ax.hist(system.flow_time, bins=30, color="skyblue", edgecolor="black")
-    ax.set_xlabel("Time in Bank (minutes)")
+    ax.hist(system.flow_time, bins=30, edgecolor='black')
+    ax.set_xlabel("Time in System (minutes)")
     ax.set_ylabel("Number of Customers")
+    ax.set_title("Distribution of Time in Bank")
     st.pyplot(fig)
-
-    st.subheader("📉 Queue Lengths Over Time")
-    df_q = pd.DataFrame(system.inv_queue, columns=["ATM Queue", "Cashier Queue"])
-    df_q["Time"] = system.inv_time
-    st.line_chart(df_q.set_index("Time"))
-
-    
