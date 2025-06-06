@@ -83,14 +83,8 @@ atm_high = st.sidebar.number_input("ATM Max Time", 0.5, 10.0, 3.0)
 st.sidebar.markdown("### Cashier Service Time (Triangular)")
 cashier_low = st.sidebar.number_input("Cashier Min Time", 1.0, 20.0, 2.0)
 cashier_mode = st.sidebar.number_input("Cashier Mode Time", 1.0, 20.0, 4.0)
-cashier_high = st.sidebar.number_input("Cashier Max Time", 1.0, 20.0, 6.0)
-
-# New checkbox to simulate training effect
-train_cashiers = st.sidebar.checkbox("Train Cashiers (reduce max service time to 10 min)")
-
-# If training is enabled, override max cashier time
-if train_cashiers:
-    cashier_high = 10.0
+# Replace max time input with a slider to allow reducing max time (simulate training)
+cashier_high = st.sidebar.slider("Cashier Max Time (simulate training)", 6.0, 20.0, 10.0)
 
 if st.button("Run Simulation"):
     # Run simulation
@@ -103,7 +97,7 @@ if st.button("Run Simulation"):
     )
     env.run(until=sim_time)
 
-    # KPIs and visualization (same as before)
+    # KPIs and visualization
     st.header("📊 Simulation Results")
     total_customers = len(system.flow_time)
     avg_time = np.mean(system.flow_time)
@@ -124,14 +118,4 @@ if st.button("Run Simulation"):
     df_q["Time"] = system.inv_time
     st.line_chart(df_q.set_index("Time"))
 
-    st.subheader("🔄 Simulation Playback")
-    placeholder = st.empty()
-    for t, (atm_q, cashier_q) in zip(system.inv_time, system.inv_queue):
-        with placeholder.container():
-            st.markdown(f"**Time: {t:.1f} min**")
-            col1, col2 = st.columns(2)
-            col1.metric("ATM Queue", atm_q)
-            col2.metric("Cashier Queue", cashier_q)
-        time.sleep(0.05)
-    st.success("Simulation completed successfully!")    
     
