@@ -69,9 +69,9 @@ class ServerSystem:
 st.title("🏦 Bank Process Flow Simulation")
 st.write("Adjust the parameters and rerun the simulation.")
 
-sim_time = st.slider("Simulation Time (minutes)", 1000, 100000, 5000, step=1000)
-arrival_rate = st.slider("Arrival Rate (customers/min)", 0.1, 2.0, 0.75, step=0.05)
-num_cashiers = st.slider("Number of Cashiers", 1, 10, 5)
+sim_time = st.slider("Simulation Time (minutes)", 1000, 10000000, 50000, step=500)
+arrival_rate = st.slider("Arrival Rate (customers/min)", 0.1, 5.0, 0.75, step=0.05)
+num_cashiers = st.slider("Number of Cashiers", 1, 20, 5)
 max_service_time = st.slider("Cashier Max Service Time (minutes)", 10, 30, 20)
 
 if st.button("Run Simulation"):
