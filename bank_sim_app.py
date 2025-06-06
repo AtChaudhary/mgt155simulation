@@ -70,20 +70,23 @@ st.title("🏦 Bank Process Flow Simulation")
 st.write("Adjust the parameters and rerun the simulation.")
 
 sim_time = st.slider("Simulation Time (minutes)", 1000, 100000, 5000, step=1000)
-arrival_rate = st.slider("Arrival Rate (customers/min)", 0.1, 2.0, 0.75, step=0.05)
-num_cashiers = st.slider("Number of Cashiers", 1, 10, 5)
-max_service_time = st.slider("Cashier Max Service Time (minutes)", 10, 30, 20)
+arrival_rate = st.slider("Arrival Rate (customers/min)", 0.1, 5.0, 0.75, step=0.05)
+num_cashiers = st.slider("Number of Cashiers", 1, 30, 5)
+max_service_time = st.slider("Cashier Max Service Time (minutes)", 1, 30, 20)
 
 if st.button("Run Simulation"):
     system = ServerSystem(sim_time, num_cashiers, arrival_rate, max_service_time)
     system.simulate()
 
-    # Metrics
-    mean_flow_time = np.mean(system.flow_time)
-    mean_wait_time = np.mean(system.wait_time)
-    mean_atm_q = np.mean([q[0] for q in system.inv_queue])
-    mean_cashier_q = np.mean([q[1] for q in system.inv_queue])
-    cashier_util = np.mean([s[1] for s in system.inv_service]) / num_cashiers
+    # Metrics with empty list handling
+    mean_flow_time = np.mean(system.flow_time) if system.flow_time else 0
+    mean_wait_time = np.mean(system.wait_time) if system.wait_time else 0
+    mean_atm_q = np.mean([q[0] for q in system.inv_queue]) if system.inv_queue else 0
+    mean_cashier_q = np.mean([q[1] for q in system.inv_queue]) if system.inv_queue else 0
+    cashier_util = (
+        np.mean([s[1] for s in system.inv_service]) / num_cashiers
+        if system.inv_service else 0
+    )
 
     st.subheader("📊 KPIs")
     st.write(f"**Avg Time in Bank:** {mean_flow_time:.2f} mins")
@@ -94,10 +97,12 @@ if st.button("Run Simulation"):
     st.write(f"**Total Customers Served:** {system.finished_customers}")
 
     st.subheader("⏱ Distribution of Time in System")
-    fig, ax = plt.subplots()
-    ax.hist(system.flow_time, bins=30, edgecolor='black')
-    ax.set_xlabel("Time in System (minutes)")
-    ax.set_ylabel("Number of Customers")
-    ax.set_title("Distribution of Time in Bank")
-    st.pyplot(fig)
-
+    if system.flow_time:
+        fig, ax = plt.subplots()
+        ax.hist(system.flow_time, bins=30, edgecolor='black')
+        ax.set_xlabel("Time in System (minutes)")
+        ax.set_ylabel("Number of Customers")
+        ax.set_title("Distribution of Time in Bank")
+        st.pyplot(fig)
+    else:
+        st.info("No customers completed the system during the simulation. No distribution to show.")
