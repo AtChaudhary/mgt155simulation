@@ -70,7 +70,7 @@ class BankSystem:
 st.title("🏦 Bank Queue Simulation")
 
 st.sidebar.header("Simulation Parameters")
-sim_time = st.sidebar.slider("Simulation Time (minutes)", 100,1000000, 50000)
+sim_time = st.sidebar.slider("Simulation Time (minutes)", 100, 1000000, 50000)
 arrival_rate = st.sidebar.slider("Customer Arrival Rate (per min)", 0.10, 5.0, 0.75, step=0.01)
 num_cashiers = st.sidebar.slider("Number of Cashiers", 1, 25, 5)
 atm_prob = st.sidebar.slider("Probability Customer Goes to ATM First", 0.0, 1.0, 0.5)
@@ -85,6 +85,13 @@ cashier_low = st.sidebar.number_input("Cashier Min Time", 1.0, 20.0, 2.0)
 cashier_mode = st.sidebar.number_input("Cashier Mode Time", 1.0, 20.0, 4.0)
 cashier_high = st.sidebar.number_input("Cashier Max Time", 1.0, 20.0, 6.0)
 
+# New checkbox to simulate training effect
+train_cashiers = st.sidebar.checkbox("Train Cashiers (reduce max service time to 10 min)")
+
+# If training is enabled, override max cashier time
+if train_cashiers:
+    cashier_high = 10.0
+
 if st.button("Run Simulation"):
     # Run simulation
     env = simpy.Environment()
@@ -96,7 +103,7 @@ if st.button("Run Simulation"):
     )
     env.run(until=sim_time)
 
-    # KPIs
+    # KPIs and visualization (same as before)
     st.header("📊 Simulation Results")
     total_customers = len(system.flow_time)
     avg_time = np.mean(system.flow_time)
@@ -105,7 +112,6 @@ if st.button("Run Simulation"):
     st.metric("ATM Utilization", f"{system.atm_busy_time / sim_time:.2%}")
     st.metric("Cashier Utilization", f"{system.cashier_busy_time / (sim_time * num_cashiers):.2%}")
 
-    # Histogram of time in bank
     st.subheader("⏱ Distribution of Time in Bank")
     fig, ax = plt.subplots()
     ax.hist(system.flow_time, bins=30, color="skyblue", edgecolor="black")
@@ -113,13 +119,11 @@ if st.button("Run Simulation"):
     ax.set_ylabel("Number of Customers")
     st.pyplot(fig)
 
-    # Queue length chart
     st.subheader("📉 Queue Lengths Over Time")
     df_q = pd.DataFrame(system.inv_queue, columns=["ATM Queue", "Cashier Queue"])
     df_q["Time"] = system.inv_time
     st.line_chart(df_q.set_index("Time"))
 
-    # Animation block
     st.subheader("🔄 Simulation Playback")
     placeholder = st.empty()
     for t, (atm_q, cashier_q) in zip(system.inv_time, system.inv_queue):
